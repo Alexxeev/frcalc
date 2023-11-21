@@ -1,0 +1,2 @@
+# frcalc
+Simple fraction calculator
