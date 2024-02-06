@@ -151,12 +151,8 @@ def main():
             continue
         if frac_input == 'exit':
             return
-        extract = False
-        if (frac_input.startswith('i ')):
-            extract = True
-        frac_input = frac_input.removeprefix('i ')
-        ans = calculate(frac_input, ans)
-        print(extract_integer_part(ans) if extract else ans)
+        ans = calculate(frac_input.removeprefix('i '), ans)
+        print(extract_integer_part(ans) if frac_input.startswith('i ') else ans)
 
 if __name__ == '__main__':
     main()
