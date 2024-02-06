@@ -2,97 +2,124 @@ from typing import Iterable
 from collections import deque
 from math import *
 from fractions import Fraction
+from dataclasses import dataclass
 
 ANSWER = 'ans'
-BINARY_OPERATORS = '+-*/'
+MINUS = '-'
+EXPONENT = '^'
+OPERATORS = '^*/+-'
 LEFT_PARENTHESIS = '('
 RIGHT_PARENTHESIS = ')'
 PARENTHESES = LEFT_PARENTHESIS + RIGHT_PARENTHESIS
 OPERATOR_PRECEDENCE = {
-    '*': 1,
-    '/': 1,
-    '+': 2,
-    '-': 2,
+    '^': 1,
+    '*': 2,
+    '/': 2,
+    '+': 3,
+    '-': 3,
 }
 OPERATOR_FUNCTION = {
     '*': lambda x, y: x * y,
     '/': lambda x, y: x / y,
     '+': lambda x, y: x + y,
     '-': lambda x, y: x - y,
+    '^': lambda x, y: x ** y,
 }
+
+UNARY_OPERATOR_FUNCTION = {
+    '-': lambda x: -x,
+}
+
+@dataclass
+class Token():
+    value: str
+    arity: int
  
-def tokenize(formula: str) -> Iterable[str]:
+def tokenize(formula: str) -> Iterable[Token]:
     '''
     Converts input string into sequence of tokens.
     '''
     formula = formula.replace(' ', '')
-    token = ""
+    digits = ""
+    previous_symbol = ''
     for symbol in formula:
         if symbol.isdigit():
-            token += symbol
-        elif symbol in BINARY_OPERATORS or symbol in PARENTHESES:
-            if len(token) > 0:
-                yield token
-                token = ""
-            yield symbol
+            digits += symbol
+        elif symbol in OPERATORS or symbol in PARENTHESES:
+            if symbol == MINUS and (previous_symbol == '' or previous_symbol in OPERATORS or previous_symbol == LEFT_PARENTHESIS):
+                yield Token(symbol, 1)
+            else:
+                if len(digits) > 0:
+                    yield Token(digits, 0)
+                    digits = ""
+                yield Token(symbol, 2)
         elif symbol in ANSWER:
-            token += symbol
-            if token == ANSWER:
-                yield token
-                token = ""
+            digits += symbol
+            if digits == ANSWER:
+                yield Token(digits, 0)
+                digits = ""
         else:
             raise ValueError('Unexpected symbol in formula: ', symbol)
-    if len(token) > 0:
-        yield token
+        previous_symbol = symbol
+    if len(digits) > 0:
+        yield Token(digits, 0)
 
-def parse(tokens: Iterable[str]) -> Iterable[str]:
+def parse(tokens: Iterable[Token]) -> Iterable[Token]:
     '''
     Converts sequence of tokens into sequence
     of tokens that represents formula in postfix
     notation.
     '''
-    stack = deque()
+    stack = deque[Token]()
     for token in tokens:
-        if token.isdigit() or token == ANSWER:
+        value = token.value
+        if value.isdigit() or value == ANSWER:
             yield token
-        elif token in BINARY_OPERATORS:
+        elif value in OPERATORS:
             while is_not_left_parenthesis_on_top(stack) and is_precending(token, stack):
                 yield stack.pop()
             stack.append(token)
-        elif token == LEFT_PARENTHESIS:
+        elif value == LEFT_PARENTHESIS:
             stack.append(token)
-        elif token == RIGHT_PARENTHESIS:
+        elif value == RIGHT_PARENTHESIS:
             while is_not_left_parenthesis_on_top(stack):
                 yield stack.pop()
-            if len(stack) > 0 and stack[-1] != LEFT_PARENTHESIS:
+            if len(stack) > 0 and stack[-1].value != LEFT_PARENTHESIS:
                 raise ValueError('Mismatched right parenthesis')
-            stack.pop()      
+            stack.pop()    
     
     while len(stack) > 0:
-        if stack[-1] == LEFT_PARENTHESIS:
+        if stack[-1].value == LEFT_PARENTHESIS:
             raise ValueError('Mismatched left parenthesis')
         yield stack.pop()
 
 def is_not_left_parenthesis_on_top(stack: deque) -> bool:
-    return len(stack) > 0 and stack[-1] != LEFT_PARENTHESIS
+    return len(stack) > 0 and stack[-1].value != LEFT_PARENTHESIS
 
-def is_precending(operator: str, stack: deque) -> bool:
-    return OPERATOR_PRECEDENCE[stack[-1]] < OPERATOR_PRECEDENCE[operator]
+def is_precending(operator: Token, stack: deque) -> bool:
+    precedence1 = 0 if stack[-1].arity == 1 else OPERATOR_PRECEDENCE[stack[-1].value]
+    precedence2 = 0 if operator.arity == 1 else OPERATOR_PRECEDENCE[operator.value]
+    return precedence1 < precedence2 or (precedence1 == precedence2 and operator.value != EXPONENT)
 
-def evaluate(formula: Iterable[str], prev_answer: Fraction) -> Fraction:
+def evaluate(formula: Iterable[Token], prev_answer: Fraction) -> Fraction:
     '''
     Evaluates formula in postfix notation.
     '''
     stack = deque()
     for token in formula:
-        if token.isdigit():
-            fraction = Fraction(int(token), 1)
+        value = token.value
+        if value.isdigit():
+            fraction = Fraction(int(value), 1)
             stack.append(fraction)
-        elif token == ANSWER:
+        elif value == ANSWER:
             stack.append(prev_answer)
-        elif token in BINARY_OPERATORS:
+        elif value in OPERATORS and token.arity == 1:
+            op = stack.pop()
+            result = UNARY_OPERATOR_FUNCTION[token.value](op)
+            stack.append(result)
+        elif value in OPERATORS:
             op2, op1 = stack.pop(), stack.pop()
-            result = OPERATOR_FUNCTION[token](op1, op2)
+            result = OPERATOR_FUNCTION[token.value](op1, op2)
             stack.append(result)
     if len(stack) != 1:
         raise ValueError('Syntax error in formula')
